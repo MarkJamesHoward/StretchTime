@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>StretchTime Settings</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: 24px;
+      user-select: none;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: #89b4fa;
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section h2 {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #a6adc8;
+      margin-bottom: 12px;
+    }
+
+    .field {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #313244;
+    }
+
+    .field label {
+      font-size: 14px;
+    }
+
+    .field input[type="number"] {
+      width: 80px;
+      padding: 6px 10px;
+      border: 1px solid #45475a;
+      border-radius: 6px;
+      background: #313244;
+      color: #cdd6f4;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .field input[type="number"]:focus {
+      outline: none;
+      border-color: #89b4fa;
+    }
+
+    .field .unit {
+      font-size: 12px;
+      color: #6c7086;
+      margin-left: 6px;
+    }
+
+    .checkbox-field {
+      display: flex;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #313244;
+      gap: 10px;
+    }
+
+    .checkbox-field input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #89b4fa;
+    }
+
+    .calendar-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #313244;
+    }
+
+    .calendar-row .status {
+      font-size: 12px;
+      margin-left: 8px;
+    }
+
+    .status.connected { color: #a6e3a1; }
+    .status.disconnected { color: #f38ba8; }
+
+    .field input[type="text"] {
+      width: 280px;
+      padding: 6px 10px;
+      border: 1px solid #45475a;
+      border-radius: 6px;
+      background: #313244;
+      color: #cdd6f4;
+      font-size: 12px;
+      font-family: monospace;
+    }
+
+    .field input[type="text"]:focus {
+      outline: none;
+      border-color: #89b4fa;
+    }
+
+    button {
+      padding: 6px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .btn-connect {
+      background: #89b4fa;
+      color: #1e1e2e;
+    }
+
+    .btn-connect:hover { background: #74c7ec; }
+
+    .btn-disconnect {
+      background: #45475a;
+      color: #cdd6f4;
+    }
+
+    .btn-disconnect:hover { background: #585b70; }
+
+    .save-bar {
+      margin-top: 24px;
+      text-align: right;
+    }
+
+    .btn-save {
+      background: #a6e3a1;
+      color: #1e1e2e;
+      padding: 10px 32px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 8px;
+    }
+
+    .btn-save:hover { background: #94e2d5; }
+
+    .saved-msg {
+      display: inline-block;
+      margin-right: 12px;
+      color: #a6e3a1;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .saved-msg.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <h1>StretchTime Settings</h1>
+
+  <div class="section">
+    <h2>Timer</h2>
+    <div class="field">
+      <label>Stretch interval</label>
+      <div>
+        <input type="number" id="stretchInterval" min="1" max="240" value="30">
+        <span class="unit">min</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Snooze duration</label>
+      <div>
+        <input type="number" id="snoozeDuration" min="1" max="60" value="5">
+        <span class="unit">min</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Calendar</h2>
+    <div class="field">
+      <label>Pre-meeting buffer</label>
+      <div>
+        <input type="number" id="preMeetingBuffer" min="0" max="60" value="15">
+        <span class="unit">min</span>
+      </div>
+    </div>
+    <div class="checkbox-field">
+      <input type="checkbox" id="blockOnTentative" checked>
+      <label for="blockOnTentative">Block stretches for tentative meetings too</label>
+    </div>
+
+    <div class="calendar-row">
+      <div>
+        <span>Outlook Calendar</span>
+        <span class="status disconnected" id="outlookStatus">Not connected</span>
+      </div>
+      <button class="btn-connect" id="outlookBtn" onclick="toggleOutlook()">Connect</button>
+    </div>
+  </div>
+
+  <div class="save-bar">
+    <span class="saved-msg" id="savedMsg">Settings saved!</span>
+    <button class="btn-save" onclick="saveSettings()">Save</button>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    let outlookConnected = false;
+
+    async function loadSettings() {
+      const s = await ipcRenderer.invoke('get-settings');
+      document.getElementById('stretchInterval').value = s.stretchIntervalMinutes;
+      document.getElementById('snoozeDuration').value = s.snoozeDurationMinutes;
+      document.getElementById('preMeetingBuffer').value = s.preMeetingBufferMinutes;
+      document.getElementById('blockOnTentative').checked = s.blockOnTentative;
+
+      outlookConnected = s.outlookConnected;
+      updateCalendarUI();
+    }
+
+    function updateCalendarUI() {
+      const os = document.getElementById('outlookStatus');
+      const ob = document.getElementById('outlookBtn');
+      if (outlookConnected) {
+        os.textContent = 'Connected';
+        os.className = 'status connected';
+        ob.textContent = 'Disconnect';
+        ob.className = 'btn-disconnect';
+      } else {
+        os.textContent = 'Not connected';
+        os.className = 'status disconnected';
+        ob.textContent = 'Connect';
+        ob.className = 'btn-connect';
+      }
+    }
+
+    async function toggleOutlook() {
+      if (outlookConnected) {
+        await ipcRenderer.invoke('disconnect-outlook');
+        outlookConnected = false;
+      } else {
+        const result = await ipcRenderer.invoke('connect-outlook');
+        if (result.success) outlookConnected = true;
+        else alert('Outlook auth failed: ' + result.error);
+      }
+      updateCalendarUI();
+    }
+
+    async function saveSettings() {
+      await ipcRenderer.invoke('update-settings', {
+        stretchIntervalMinutes: parseInt(document.getElementById('stretchInterval').value) || 30,
+        snoozeDurationMinutes: parseInt(document.getElementById('snoozeDuration').value) || 5,
+        preMeetingBufferMinutes: parseInt(document.getElementById('preMeetingBuffer').value) || 15,
+        blockOnTentative: document.getElementById('blockOnTentative').checked,
+      });
+
+      const msg = document.getElementById('savedMsg');
+      msg.classList.add('show');
+      setTimeout(() => msg.classList.remove('show'), 2000);
+    }
+
+    loadSettings();
+  </script>
+</body>
+</html>
